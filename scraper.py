@@ -3,7 +3,12 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 import os
 import json
+import json
 from typing import List, Dict, Tuple, Any
+import urllib3
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration for Scoping
 TOPIC_PROMPTS = {
@@ -40,7 +45,8 @@ def fetch_and_extract(url: str, topic: str, api_key: str, char_limit: int = 2000
 
     # 1. Fetch
     try:
-        response = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        # verify=False fixes the SSL Error for sites with incomplete chains
+        response = requests.get(url, headers=DEFAULT_HEADERS, timeout=20, verify=False)
         response.encoding = response.apparent_encoding or 'utf-8'
         if response.status_code != 200:
             return [], f"HTTP Error {response.status_code}"

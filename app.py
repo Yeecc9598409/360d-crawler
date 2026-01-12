@@ -11,9 +11,7 @@ import scheduler
 import mailer
 
 # --- 初始化 (Backend) ---
-# Ensure DB is ready
 database.init_db()
-# Start background scheduler
 scheduler.start_scheduler()
 
 # --- 頁面設定 ---
@@ -24,235 +22,268 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS 樣式 (Professional/ToughData Style) ---
+# --- CSS 優化 (Polished UI) ---
 st.markdown("""
 <style>
-    /* Import Font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    /* Google Font */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
     
-    * { font-family: 'Inter', sans-serif; }
-    
-    /* Global Background */
-    .stApp {
-        background-color: #f8f9fa;
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Noto Sans TC', sans-serif;
     }
 
-    /* Sidebar Styling */
+    /* 背景與主色調 */
+    .stApp {
+        background-color: #f0f2f6;
+    }
+    
+    /* 側邊欄 */
     section[data-testid="stSidebar"] {
         background-color: #ffffff;
-        border-right: 1px solid #e9ecef;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.05);
     }
     
-    /* Card Container */
+    /* 卡片樣式 */
     .css-card {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        background-color: #ffffff;
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
         margin-bottom: 1.5rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #eef2f6;
     }
 
-    /* Header Typography */
+    /* 標題樣式 */
     h1, h2, h3 {
-        color: #1e293b;
+        color: #1a202c;
         font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    h2 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    p { color: #4a5568; line-height: 1.6; }
+
+    /* 輸入框 Label 優化 */
+    .stTextInput label, .stSelectbox label, .stNumberInput label {
+        color: #2d3748 !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        margin-bottom: 0.25rem;
     }
     
-    /* Custom Button (Red Accent) */
+    /* 按鈕樣式 (更現代的藍紫色) */
     .stButton > button {
-        background-color: #ef4444; /* Red-500 */
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 8px;
         border: none;
-        padding: 0.5rem 1.5rem;
+        padding: 0.6rem 2rem;
+        border-radius: 10px;
         font-weight: 600;
-        transition: all 0.2s;
+        box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+        transition: transform 0.2s, box-shadow 0.2s;
+        width: 100%;
     }
     .stButton > button:hover {
-        background-color: #dc2626; /* Red-600 */
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
+        color: white;
+    }
+    .stButton > button:active {
+        transform: translateY(0);
     }
 
-    /* Metric Card */
-    .metric-box {
-        background: #f1f5f9;
-        padding: 1rem;
-        border-radius: 8px;
-        text-align: center;
-        border: 1px solid #cbd5e1;
+    /* 訊息框 */
+    .stAlert {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    .metric-value { font-size: 1.5rem; font-weight: bold; color: #0f172a; }
-    .metric-label { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+    
+    /* 分頁 Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2rem;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 3rem;
+        white-space: pre-wrap;
+        background-color: transparent;
+        border-radius: 4px;
+        color: #718096;
+        font-weight: 600;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: transparent;
+        color: #5a67d8;
+        border-bottom: 3px solid #5a67d8;
+    }
 
 </style>
 """, unsafe_allow_html=True)
 
-# --- 側邊欄 (設定 & 歷史) ---
+# --- 側邊欄 ---
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/data-configuration.png", width=64)
-    st.title("360d 儀表板")
-    st.markdown("---")
+    st.title("⚙️ 設定與紀錄")
     
-    # 1. API Configuration
-    st.subheader("⚙️ 系統設定")
+    # API Key Configuration
+    st.subheader("🔑 API 金鑰設定")
+    
+    # 1. Try to load from Environment (Secure Mode)
     env_key = os.getenv("GEMINI_API_KEY")
-    api_key_input = st.text_input(
-        "Gemini API Key", 
-        value=env_key if env_key else "",
-        type="password",
-        placeholder="Enter key if not in .env"
-    )
-    if not api_key_input:
-        st.warning("⚠️ 請輸入 API Key 以啟用功能")
-
-    st.markdown("---")
     
-    # 2. History Log
-    st.subheader("📜 歷史紀錄")
-    history_items = database.get_history(limit=10)
+    if env_key:
+        st.success("✅ API Key 已從系統環境變數安全載入")
+        api_key_input = env_key # Use the secure key
+    else:
+        # 2. Fallback to Manual Input (Dev Mode)
+        st.warning("⚠️ 未偵測到環境變數，目前為手動模式")
+        api_key_input = st.text_input(
+            "Gemini API Key", 
+            type="password",
+            placeholder="請在此貼上您的 Key (僅供測試)",
+            help="為了安全起見，正式部署請務必在 Zeabur/Docker 設定環境變數 GEMINI_API_KEY，此欄位將自動隱藏。"
+        )
+        if not api_key_input:
+            st.caption("[👉 點此免費獲取 Key](https://aistudio.google.com/app/apikey)")
+    
+    st.divider()
+    
+    # History Log
+    st.subheader("📜 最近執行紀錄")
+    history_items = database.get_history(limit=5)
     
     if not history_items:
-        st.info("尚無執行紀錄")
+        st.caption("尚無資料")
     else:
         for item in history_items:
-            # Parse timestamp for display
             ts = datetime.strptime(item['timestamp'], "%Y-%m-%d %H:%M:%S")
-            ts_str = ts.strftime("%m/%d %H:%M")
-            status_emoji = "✅" if item['status'] == 'success' else "❌" if item['status'] == 'failed' else "🤖"
+            time_str = ts.strftime("%m/%d %H:%M")
+            status_color = "🟢" if item['status'] == 'success' else "🔴"
             
-            with st.expander(f"{status_emoji} {ts_str} - {item['topic']}"):
-                st.caption(f"URL: {item['url']}")
-                st.caption(f"結果: {item['summary']}")
-                st.json(item['data_json'], expanded=False)
+            with st.expander(f"{status_color} {time_str}"):
+                st.write(f"**主題**: {item['topic']}")
+                st.caption(f"網址: {item['url']}")
+                st.caption(f"筆數: {item['summary']}")
 
-# --- 主畫面 ---
-st.markdown("## 🔍 智能數據提取 (Intelligent Extraction)")
-st.markdown("透過 Gemini AI 自動從目標網頁提取結構化資訊。")
+# --- 主標題 ---
+st.markdown("""
+    <h1 style='text-align: center; margin-bottom: 2rem;'>
+        🔭 360d 智能數據儀表板
+    </h1>
+""", unsafe_allow_html=True)
 
 # Create Tabs
-tab1, tab2 = st.tabs(["🚀 手動執行 (Manual)", "🤖 自動化排程 (Automation)"])
+tab1, tab2 = st.tabs(["🚀 即時提取 (Instant Scrape)", "📅 定期排程 (Automation)"])
 
 # --- TAB 1: 手動執行 ---
 with tab1:
-    with st.container():
-        st.markdown('<div class="css-card">', unsafe_allow_html=True)
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            target_url = st.text_input(
-                "目標網址 (Target URL)", 
-                value="https://www.roccrane.org.tw/",
-                placeholder="https://example.com"
-            )
-        
-        with col2:
-            topic = st.selectbox(
-                "提取主題 (Topic)",
-                options=["News/Articles", "Products/Pricing", "Company Info"],
-                format_func=lambda x: {
-                    "News/Articles": "📰 新聞/文章",
-                    "Products/Pricing": "🏷️ 產品/價格",
-                    "Company Info": "🏢 公司資訊"
-                }[x]
-            )
-            
-        if st.button("開始提取 (Start Scraping)", use_container_width=True):
-            if not api_key_input:
-                st.error("❌ 請先設定 API Key")
-            elif not target_url:
-                st.error("❌ 請輸入目標網址")
-            else:
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                # Step 1
-                status_text.text("正在連線至目標網站...")
-                progress_bar.progress(30)
-                
-                # Step 2: Extract
-                status_text.text("AI 正在分析內容 (請稍候)...")
+    st.markdown('<div class="css-card">', unsafe_allow_html=True)
+    st.write("### 🎯 設定提取目標")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        target_url = st.text_input(
+            "🌐 目標網址 (Website URL)", 
+            value="https://www.roccrane.org.tw/",
+            placeholder="請輸入完整網址，例如 https://example.com"
+        )
+    with col2:
+        topic_options = {
+            "News/Articles": "📰 新聞與文章列表",
+            "Products/Pricing": "🏷️ 產品與價格表",
+            "Company Info": "🏢 公司聯絡資訊"
+        }
+        topic = st.selectbox(
+            "📂 提取類別 (Topic)",
+            options=list(topic_options.keys()),
+            format_func=lambda x: topic_options[x]
+        )
+
+    st.write("") # Spacer
+    if st.button("✨ 開始智能分析 (Analyze Now)", type="primary"):
+        if not api_key_input:
+            st.warning("⚠️ 請先設定 API Key (建議使用環境變數)。")
+        elif not target_url:
+            st.warning("⚠️ 請輸入目標網址。")
+        else:
+            with st.status("🤖 AI 正在工作中...", expanded=True) as status:
+                st.write("連線至網站...")
+                time.sleep(0.5)
+                st.write("讀取並清洗網頁內容...")
+                # Call Scraper
                 data, error = scraper.fetch_and_extract(target_url, topic, api_key_input)
-                progress_bar.progress(90)
                 
                 if error:
-                    st.error(f"執行失敗: {error}")
+                    status.update(label="❌ 執行失敗", state="error", expanded=True)
+                    st.error(f"錯誤代碼: {error}")
                     database.add_history(target_url, topic, [], status="failed")
                 else:
-                    progress_bar.progress(100)
-                    st.success(f"成功提取 {len(data)} 筆資料！")
+                    status.update(label="✅ 分析完成！", state="complete", expanded=False)
                     database.add_history(target_url, topic, data, status="success")
                     
-                    # Store in session state for downloading (optional improvement)
-                    st.session_state['last_data'] = data
+                    st.success(f"成功提取 {len(data)} 筆結構化數據")
                     
-                    # Display Data
-                    st.markdown("### 📊 提取結果")
+                    # Data Display
                     df = pd.DataFrame(data)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
                     
-                    # Download Buttons
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.download_button(
-                            "📥 下載 CSV",
-                            data=df.to_csv(index=False).encode('utf-8-sig'),
-                            file_name="360d_export.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                status_text.empty()
-        st.markdown('</div>', unsafe_allow_html=True)
+                    # Downloads
+                    csv = df.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        "📥 下載 Excel/CSV",
+                        data=csv,
+                        file_name=f"360d_export_{int(time.time())}.csv",
+                        mime="text/csv"
+                    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- TAB 2: 自動化排程 ---
 with tab2:
     st.markdown('<div class="css-card">', unsafe_allow_html=True)
-    st.markdown("### ⏱️ 設定定期提取任務")
-    st.info("設定後，系統將在背景自動執行，並將結果寄送至指定信箱。")
+    st.write("### ⏰ 新增自動化任務")
+    st.info("設定排程後，系統將在背景自動監控此網頁，並定期將最新數據寄送給您。")
     
-    with st.form("schedule_form"):
-        s_url = st.text_input("目標網址", value=target_url)
-        s_topic = st.selectbox(
-            "提取主題",
-            ["News/Articles", "Products/Pricing", "Company Info"],
-            key="sched_topic"
-        )
-        s_email = st.text_input("通知信箱 (Email)", placeholder="yourname@example.com")
-        s_days = st.number_input("執行頻率 (天)", min_value=1, value=1)
+    with st.form("scheduler_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            s_url = st.text_input("🔗 監控網址 (URL)", value=target_url)
+            s_email = st.text_input("📧 通知信箱 (Email)", placeholder="name@company.com")
+        with c2:
+            s_topic = st.selectbox(
+                "📂 監控類別 (Topic)", 
+                options=list(topic_options.keys()), 
+                format_func=lambda x: topic_options[x]
+            )
+            s_days = st.number_input("⏱️ 執行頻率 (每X天)", min_value=1, value=1, help="例如：輸入 1 代表每天執行一次")
         
-        submitted = st.form_submit_button("📅 建立排程任務")
+        st.write("")
+        submit_btn = st.form_submit_button("✅ 啟動排程 (Activate Schedule)")
         
-        if submitted:
+        if submit_btn:
             if not s_email or "@" not in s_email:
-                st.error("請輸入有效的 Email 地址")
+                st.error("請輸入正確的 Email 格式")
+            elif not api_key_input:
+                st.error("排程需要 API Key 才能在背景執行，請先設定。")
             else:
                 database.add_schedule(s_url, s_topic, s_email, s_days)
-                st.success(f"✅ 排程已建立！每 {s_days} 天將自動提取一次並寄信通知。")
+                st.success(f"已建立任務！將每 {s_days} 天監控一次並發送報告。")
                 time.sleep(1)
                 st.rerun()
-
-    # Show Active Schedules
-    st.divider()
-    st.markdown("### 📋 執行中的任務")
-    schedules = database.get_due_schedules() # This gets DUE ones, let's make a get_all helper? 
-    # Actually for UI we want all active. 
-    # Let's use raw SQL here for simplicity or add a helper. 
-    # I'll add a quick inline fetch for display.
     
+    st.divider()
+    
+    st.subheader("📋 目前執行中的任務")
     conn = database.get_connection()
-    active_scheds = conn.execute("SELECT * FROM schedules WHERE is_active=1 ORDER BY created_at DESC").fetchall()
+    jobs = conn.execute("SELECT * FROM schedules WHERE is_active=1 ORDER BY created_at DESC").fetchall()
     conn.close()
     
-    if not active_scheds:
-        st.text("目前無自訂排程。")
+    if not jobs:
+        st.caption("目前沒有排程任務")
     else:
-        for job in active_scheds:
+        for job in jobs:
             with st.container():
-                c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-                c1.markdown(f"**{job['url']}**")
-                c2.caption(f"主題: {job['topic']}")
-                c3.caption(f"每 {job['frequency_days']} 天 (下次: {job['next_run'][:10]})")
-                c4.markdown("🟢 運行中")
-                st.divider()
-
+                cols = st.columns([4, 2, 2, 1])
+                cols[0].write(f"**{job['url']}**")
+                cols[1].caption(f"類別: {job['topic']}")
+                cols[2].caption(f"頻率: 每 {job['frequency_days']} 天")
+                cols[3].caption("🟢 運行中")
+                st.markdown("---")
     st.markdown('</div>', unsafe_allow_html=True)
