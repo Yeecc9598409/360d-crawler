@@ -3,9 +3,14 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 import os
 import json
-import json
+import time
 from typing import List, Dict, Tuple, Any
 import urllib3
+
+# Rate limiting configuration
+API_CALL_DELAY = 2  # seconds to wait before each API call
+MAX_RETRIES = 3     # max retry attempts on rate limit errors
+RETRY_BASE_DELAY = 30  # base delay for exponential backoff (seconds)
 
 # Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -35,7 +40,7 @@ def clean_html(html_content: str) -> str:
     cleaned_text = '\n'.join(chunk for chunk in chunks if chunk)
     return cleaned_text
 
-def fetch_and_extract(url: str, topic: str, api_key: str, char_limit: int = 20000) -> Tuple[List[Dict[str, Any]], str]:
+def fetch_and_extract(url: str, topic: str, api_key: str, char_limit: int = 8000) -> Tuple[List[Dict[str, Any]], str]:
     """
     Fetches URL, cleans HTML, and uses Gemini to extract data based on Topic.
     Returns (Data List, Error Message).
@@ -59,7 +64,7 @@ def fetch_and_extract(url: str, topic: str, api_key: str, char_limit: int = 2000
 
     # 3. AI Extraction
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
     
     prompt_instruction = TOPIC_PROMPTS.get(topic, TOPIC_PROMPTS["News/Articles"])
     
@@ -78,19 +83,41 @@ def fetch_and_extract(url: str, topic: str, api_key: str, char_limit: int = 2000
     """
     
     try:
-        payload = model.generate_content(full_prompt)
-        text_resp = payload.text
-        # Cleanup potential markdown
-        text_resp = text_resp.replace("```json", "").replace("```", "").strip()
-        data = json.loads(text_resp)
+        # Rate limiting: wait before making API call
+        print(f"[Rate Limit] Waiting {API_CALL_DELAY}s before API call...")
+        time.sleep(API_CALL_DELAY)
         
-        if isinstance(data, list):
-            return data, None
-        elif isinstance(data, dict):
-             # Handle case where AI returns a single object instead of list
-            return [data], None
-        else:
-            return [], "AI returned unexpected format"
+        # Retry logic with exponential backoff
+        last_error = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                payload = model.generate_content(full_prompt)
+                text_resp = payload.text
+                # Cleanup potential markdown
+                text_resp = text_resp.replace("```json", "").replace("```", "").strip()
+                data = json.loads(text_resp)
+                
+                if isinstance(data, list):
+                    return data, None
+                elif isinstance(data, dict):
+                     # Handle case where AI returns a single object instead of list
+                    return [data], None
+                else:
+                    return [], "AI returned unexpected format"
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                
+                # Check if it's a rate limit error (429)
+                if "429" in error_str or "quota" in error_str.lower():
+                    wait_time = RETRY_BASE_DELAY * (2 ** attempt)  # exponential backoff
+                    print(f"[Rate Limit] Hit 429 error. Attempt {attempt + 1}/{MAX_RETRIES}. Waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    # Not a rate limit error, don't retry
+                    break
+        
+        return [], f"AI Error: {str(last_error)}"
             
     except Exception as e:
         return [], f"AI Error: {str(e)}"

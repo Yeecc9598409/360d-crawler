@@ -45,6 +45,17 @@ def init_db():
         )
     ''')
     
+    # Simple migration check for existing tables
+    try:
+        c.execute("ALTER TABLE schedules ADD COLUMN url TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass # Column likely exists
+        
+    try:
+        c.execute("ALTER TABLE schedules ADD COLUMN topic TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass # Column likely exists
+    
     conn.commit()
     conn.close()
 
