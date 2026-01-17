@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Play, Clock, Database, Search, ToggleLeft, ToggleRight, Trash2, FileText, Activity, X, ChevronRight } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface HistoryItem {
   id: number;
@@ -12,10 +13,11 @@ interface HistoryItem {
 }
 
 const ManualView: React.FC = () => {
-  const [extractTopic, setExtractTopic] = useState(true);
-  const [extractHint, setExtractHint] = useState('');
+  // const [scraperType, setScraperType] = useState<'AI' | 'CSS'>('AI'); // Removed
+  // const [extractTopic, setExtractTopic] = useState(true); // Removed
+  // const [extractHint, setExtractHint] = useState(''); // Removed
   const [targetUrl, setTargetUrl] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('yeecc9598409@gmail.com');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
@@ -30,7 +32,7 @@ const ManualView: React.FC = () => {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/history?limit=10');
+      const res = await fetch(`${API_BASE_URL}/api/history?limit=10`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data);
@@ -49,17 +51,16 @@ const ManualView: React.FC = () => {
     setLastTime(null);
     setLastCount(null);
     const startTime = Date.now();
-
     try {
-      const response = await fetch('http://localhost:8000/api/extract', {
+      const response = await fetch(`${API_BASE_URL}/api/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: targetUrl,
-          topic: extractTopic ? (extractHint || "News/Articles") : "Raw",
           email: email
         })
       });
+      // ...
 
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
@@ -95,172 +96,155 @@ const ManualView: React.FC = () => {
 
       <div className="space-y-8 flex-1">
 
-        {/* URL Input (New) */}
+        {/* URL Input */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 group hover:border-cyber-500/30 transition-colors">
           <label className="text-slate-300 font-medium block mb-3 flex items-center gap-2">
             <ToggleRight size={16} /> 目標網站 URL
           </label>
           <input
             type="text"
+            list="history-urls"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder="https://example.com"
             className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyber-500 focus:ring-1 focus:ring-cyber-500 transition-all placeholder:text-slate-600"
           />
+          <datalist id="history-urls">
+            {history.map((item, idx) => (
+              <option key={idx} value={item.url} />
+            ))}
+          </datalist>
         </div>
 
-        {/* Row 2: Topic & Email */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Topic Toggle */}
-          <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between group hover:border-cyber-500/30 transition-colors">
-            <div className="flex justify-between items-start mb-2">
-              <span className="text-slate-300 font-medium">智能主題擷取</span>
-              <button
-                onClick={() => setExtractTopic(!extractTopic)}
-                className="text-cyber-400 transition-transform active:scale-95"
-              >
-                {extractTopic ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-slate-600" />}
-              </button>
-            </div>
-
-            {extractTopic && (
-              <input
-                type="text"
-                value={extractHint}
-                onChange={(e) => setExtractHint(e.target.value)}
-                placeholder="輸入主題關鍵字 (例如: 最新新聞)..."
-                className="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-cyber-500 mb-2 placeholder:text-slate-600"
-              />
-            )}
-
-            <p className="text-xs text-slate-500">
-              {extractTopic
-                ? "AI 將根據關鍵字自動識別主題。"
-                : "將回傳未經分析的原始 HTML 內容。"}
-            </p>
-          </div>
-
-          {/* Email Input */}
-          <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 group hover:border-cyber-500/30 transition-colors">
-            <label className="text-slate-300 font-medium block mb-3 flex items-center gap-2">
-              <Mail size={16} /> 通知電子信箱
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyber-500 focus:ring-1 focus:ring-cyber-500 transition-all placeholder:text-slate-600"
-            />
-          </div>
-        </div>
-
-        {/* Main Action & History Split */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-          {/* History / Recent (Takes 1 col) */}
-          <div className="md:col-span-1 bg-slate-900/50 rounded-2xl border border-slate-800 p-5 flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">歷史紀錄</span>
-              <span className="text-xs text-slate-600 font-mono">最近 {history.length} 筆</span>
-            </div>
-            <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar max-h-[300px]">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedHistory(item)}
-                  className="flex items-center justify-between p-2 rounded hover:bg-slate-800/80 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <FileText size={14} className={`shrink-0 ${item.status === 'success' ? 'text-emerald-500' : 'text-red-500'}`} />
-                    <div className="overflow-hidden">
-                      <div className="text-xs text-slate-300 truncate font-medium">{item.summary}</div>
-                      <div className="text-[10px] text-slate-500 truncate">{item.url}</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={12} className="text-slate-700 group-hover:text-slate-400" />
-                </div>
-              ))}
-              {history.length === 0 && (
-                <div className="text-center text-slate-600 py-4 text-xs">暫無紀錄</div>
-              )}
-            </div>
-            <button
-              onClick={fetchHistory}
-              className="mt-3 w-full text-xs text-center text-slate-500 hover:text-slate-300 py-2 border-t border-slate-800"
-            >
-              重新整理
-            </button>
-          </div>
-
-          {/* Start Action (Takes 2 cols) */}
-          <div className="md:col-span-2 flex flex-col gap-4">
-            <button
-              onClick={handleStartExtraction}
-              disabled={loading}
-              className="group relative w-full bg-gradient-to-r from-cyber-600 to-blue-600 hover:from-cyber-500 hover:to-blue-500 text-white rounded-2xl p-4 transition-all duration-300 shadow-lg shadow-cyber-900/50 hover:shadow-cyber-500/20 active:scale-[0.99] overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed">
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 group-hover:opacity-30 transition-opacity"></div>
-              <div className="relative flex items-center justify-center gap-3">
-                <span className="font-bold text-lg tracking-wide">{loading ? '處理中...' : '啟動爬取程序'}</span>
-                {!loading && <Play size={20} className="fill-current" />}
-              </div>
-            </button>
-
-            {/* Status / Output Preview Box */}
-            <div className="flex-1 bg-black/40 rounded-2xl border border-slate-800 p-5 font-mono text-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-2 opacity-50">
-                <Activity size={16} className={`text-emerald-500 ${loading ? 'animate-pulse' : ''}`} />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-slate-500">
-                  <span>實際時間</span>
-                  <span className="text-slate-200">{lastTime || '--'}</span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>當前數量</span>
-                  <span className="text-slate-200">{lastCount !== null ? `${lastCount} Items` : '--'}</span>
-                </div>
-                {loading && (
-                  <div className="w-full bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
-                    <div className="bg-cyber-500 h-full w-[0%] animate-[width_2s_ease-in-out_infinite]"></div>
-                  </div>
-                )}
-                <div className="mt-4 text-xs text-slate-600">
-                  {loading ? '> 系統正在擷取中...' : '> 等待指令...'}
-                </div>
-              </div>
-            </div>
-          </div>
-
+        {/* Email Input */}
+        <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 group hover:border-cyber-500/30 transition-colors">
+          <label className="text-slate-300 font-medium block mb-3 flex items-center gap-2">
+            <Mail size={16} /> 通知 Email (選填)
+          </label>
+          <input
+            type="email"
+            list="history-emails"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your@email.com"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyber-500 focus:ring-1 focus:ring-cyber-500 transition-all placeholder:text-slate-600"
+          />
+          <datalist id="history-emails">
+            {/*  Ideally we store used emails in history too, but for now reuse URL history purely as a source or empty? 
+                      Actually history object doesn't have email. Let's leave empty or implement email history later. 
+                 */}
+          </datalist>
         </div>
       </div>
 
-      {/* Data Modal */}
-      {selectedHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex justify-between items-center p-4 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Database size={18} className="text-cyber-400" />
-                擷取資料預覽
-              </h3>
-              <button
-                onClick={() => setSelectedHistory(null)}
-                className="p-1 hover:bg-slate-800 rounded-full transition-colors"
-              >
-                <X size={20} className="text-slate-400" />
-              </button>
+      {/* Main Action & History Split */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        {/* Start Action (Takes 2 cols) */}
+        <div className="md:col-span-2 flex flex-col gap-4">
+          <button
+            onClick={handleStartExtraction}
+            disabled={loading}
+            className="group relative w-full bg-gradient-to-r from-cyber-600 to-blue-600 hover:from-cyber-500 hover:to-blue-500 text-white rounded-2xl p-4 transition-all duration-300 shadow-lg shadow-cyber-900/50 hover:shadow-cyber-500/20 active:scale-[0.99] overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed">
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 group-hover:opacity-30 transition-opacity"></div>
+            <div className="relative flex items-center justify-center gap-3">
+              <span className="font-bold text-lg tracking-wide">{loading ? '處理中...' : '啟動爬取程序'}</span>
+              {!loading && <Play size={20} className="fill-current" />}
             </div>
-            <div className="p-4 overflow-auto custom-scrollbar flex-1 font-mono text-xs text-slate-300 bg-black/20">
-              <pre>{JSON.stringify(JSON.parse(selectedHistory.data_json || '[]'), null, 2)}</pre>
+          </button>
+
+          {/* Status / Output Preview Box */}
+          <div className="flex-1 bg-black/40 rounded-2xl border border-slate-800 p-5 font-mono text-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2 opacity-50">
+              <Activity size={16} className={`text-emerald-500 ${loading ? 'animate-pulse' : ''}`} />
             </div>
-            <div className="p-3 border-t border-slate-800 flex justify-end">
-              <span className="text-xs text-slate-500">ID: {selectedHistory.id} | {selectedHistory.timestamp}</span>
+            <div className="space-y-2">
+              <div className="flex justify-between text-slate-500">
+                <span>實際時間</span>
+                <span className="text-slate-200">{lastTime || '--'}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>當前數量</span>
+                <span className="text-slate-200">{lastCount !== null ? `${lastCount} Items` : '--'}</span>
+              </div>
+              {loading && (
+                <div className="w-full bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                  <div className="bg-cyber-500 h-full w-[0%] animate-[width_2s_ease-in-out_infinite]"></div>
+                </div>
+              )}
+              <div className="mt-4 text-xs text-slate-600">
+                {loading ? '> 系統正在擷取中...' : '> 等待指令...'}
+              </div>
             </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* History / Recent (Takes 1 col) */}
+        <div className="md:col-span-1 bg-slate-900/50 rounded-2xl border border-slate-800 p-5 flex flex-col">
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">歷史紀錄</span>
+            <span className="text-xs text-slate-600 font-mono">最近 {history.length} 筆</span>
+          </div>
+          <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar max-h-[300px]">
+            {history.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedHistory(item)}
+                className="flex items-center justify-between p-2 rounded hover:bg-slate-800/80 transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <FileText size={14} className={`shrink-0 ${item.status === 'success' ? 'text-emerald-500' : 'text-red-500'}`} />
+                  <div className="overflow-hidden">
+                    <div className="text-xs text-slate-300 truncate font-medium">{item.summary}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{item.url}</div>
+                  </div>
+                </div>
+                <ChevronRight size={12} className="text-slate-700 group-hover:text-slate-400" />
+              </div>
+            ))}
+            {history.length === 0 && (
+              <div className="text-center text-slate-600 py-4 text-xs">暫無紀錄</div>
+            )}
+          </div>
+          <button
+            onClick={fetchHistory}
+            className="mt-3 w-full text-xs text-center text-slate-500 hover:text-slate-300 py-2 border-t border-slate-800"
+          >
+            重新整理
+          </button>
+        </div>
+
+      </div>
+
+
+      {/* Data Modal */}
+      {
+        selectedHistory && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
+              <div className="flex justify-between items-center p-4 border-b border-slate-800">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Database size={18} className="text-cyber-400" />
+                  擷取資料預覽
+                </h3>
+                <button
+                  onClick={() => setSelectedHistory(null)}
+                  className="p-1 hover:bg-slate-800 rounded-full transition-colors"
+                >
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-4 overflow-auto custom-scrollbar flex-1 font-mono text-xs text-slate-300 bg-black/20">
+                <pre>{JSON.stringify(JSON.parse(selectedHistory.data_json || '[]'), null, 2)}</pre>
+              </div>
+              <div className="p-3 border-t border-slate-800 flex justify-end">
+                <span className="text-xs text-slate-500">ID: {selectedHistory.id} | {selectedHistory.timestamp}</span>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 
