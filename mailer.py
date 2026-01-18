@@ -47,12 +47,12 @@ def send_notification_email(to_email: str, subject: str, content_html: str = "",
         </html>
         """
     
-    # 1. Try n8n Webhook
+    # 1. Try Webhook
     webhook_url = os.getenv("MAILER_WEBHOOK_URL")
     if webhook_url:
         try:
             import requests
-            print(f"[Mailer] Sending via n8n Webhook: {webhook_url}")
+            print(f"[Mailer] Sending via Webhook: {webhook_url}")
             # Send PRE-GENERATED HTML
             payload = {
                 "to_email": to_email,
@@ -61,12 +61,12 @@ def send_notification_email(to_email: str, subject: str, content_html: str = "",
             }
             resp = requests.post(webhook_url, json=payload, timeout=10)
             if resp.status_code == 200:
-                print("[Mailer] n8n Webhook success.")
+                print("[Mailer] Webhook success.")
                 return True
             else:
-                print(f"[Mailer] n8n Webhook failed: {resp.status_code} {resp.text}")
+                print(f"[Mailer] Webhook failed: {resp.status_code} {resp.text}")
         except Exception as e:
-            print(f"[Mailer] n8n Webhook error: {e}")
+            print(f"[Mailer] Webhook error: {e}")
 
     # 2. Try SMTP 
     smtp_email = os.getenv("SMTP_EMAIL")
