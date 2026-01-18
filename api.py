@@ -15,11 +15,15 @@ load_dotenv(".env.local")
 app = FastAPI(title="360D Crawler API", version="1.0.0")
 
 # Enable CORS for React Frontend (default Vite port is 5173) and Zeabur
-origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+print(f"[CORS DEBUG] Loaded Origins: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.zeabur\.app", # Fallback for any Zeabur subdomain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
