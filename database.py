@@ -45,16 +45,20 @@ def init_db():
         )
     ''')
     
-    # Simple migration check for existing tables
-    try:
-        c.execute("ALTER TABLE schedules ADD COLUMN url TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass # Column likely exists
-        
-    try:
-        c.execute("ALTER TABLE schedules ADD COLUMN topic TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass # Column likely exists
+    # Migrations - Use helper to avoid repetition and indentation errors
+    migrations = [
+        "ALTER TABLE schedules ADD COLUMN url TEXT DEFAULT ''",
+        "ALTER TABLE schedules ADD COLUMN topic TEXT DEFAULT ''",
+        "ALTER TABLE schedules ADD COLUMN scraper_type TEXT DEFAULT 'AI'",
+        "ALTER TABLE schedules ADD COLUMN unit TEXT DEFAULT 'days'",
+        "ALTER TABLE schedules ADD COLUMN is_continuous BOOLEAN DEFAULT 1"
+    ]
+    
+    for query in migrations:
+        try:
+            c.execute(query)
+        except sqlite3.OperationalError:
+            pass # Column likely exists
     
     conn.commit()
     conn.close()
@@ -80,16 +84,47 @@ def get_history(limit: int = 50):
     conn.close()
     return [dict(row) for row in rows]
 
-def add_schedule(url: str, topic: str, email: str, frequency_days: int):
+def get_last_history_for_url(url: str):
+    """
+    Retrieves the most recent history entry for a specific URL.
+    Used for detecting duplicate manual checks.
+    """
     conn = get_connection()
     c = conn.cursor()
-    # Check if exists to avoid duplicates (optional, for now allow multiple)
+    c.execute("SELECT * FROM history WHERE url = ? ORDER BY timestamp DESC LIMIT 1", (url,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+def add_schedule(url: str, topic: str, email: str, frequency_days: int, scraper_type: str = "AI", unit: str = "days", is_continuous: bool = True):
+    conn = get_connection()
+    c = conn.cursor()
+    
+    # IMPORTANT: Deactivate any existing active schedule for the same URL+Email to prevent duplicates
     c.execute(
-        "INSERT INTO schedules (url, topic, email, frequency_days, next_run) VALUES (?, ?, ?, ?, datetime('now'))",
-        (url, topic, email, frequency_days)
+        "UPDATE schedules SET is_active = 0 WHERE url = ? AND email = ? AND is_active = 1",
+        (url, email)
     )
+    deactivated = c.rowcount
+    if deactivated > 0:
+        print(f"[DB] Deactivated {deactivated} existing schedule(s) for {url}")
+    
+    # Calculate next_run based on frequency and unit
+    if unit == 'minutes':
+        next_run_expr = f"datetime('now', '+{frequency_days} minutes')"
+    else:
+        next_run_expr = f"datetime('now', '+{frequency_days} days')"
+    
+    c.execute(
+        f"INSERT INTO schedules (url, topic, email, frequency_days, scraper_type, unit, next_run, is_continuous) VALUES (?, ?, ?, ?, ?, ?, {next_run_expr}, ?)",
+        (url, topic, email, frequency_days, scraper_type, unit, 1 if is_continuous else 0)
+    )
+    schedule_id = c.lastrowid
     conn.commit()
     conn.close()
+    return schedule_id
 
 def get_due_schedules():
     conn = get_connection()
@@ -99,12 +134,57 @@ def get_due_schedules():
     conn.close()
     return [dict(row) for row in rows]
 
-def update_schedule_next_run(schedule_id: int, days_offset: int):
+def update_schedule_next_run(schedule_id: int, flow_val: int, unit: str = "days"):
     conn = get_connection()
     c = conn.cursor()
+    
+    # If unit is 'minutes', add flow_val minutes.
+    # Otherwise add flow_val days.
+    
+    if unit == 'minutes':
+         time_expr = f"datetime('now', '+{flow_val} minutes')"
+    else:
+         # Default to days. 
+         # Legacy test mode (flow_val=0 -> 1 minute) is replaced by explicit unit='minutes' usage.
+         if flow_val == 0 and unit == 'days':
+             # Keep fallback just in case for old calls, though frontend now sends unit='minutes'
+             time_expr = "datetime('now', '+1 minute')"
+         else:
+             time_expr = f"datetime('now', '+{flow_val} days')"
+
     c.execute(
-        f"UPDATE schedules SET last_run = datetime('now'), next_run = datetime('now', '+{days_offset} days') WHERE id = ?",
+        f"UPDATE schedules SET last_run = datetime('now'), next_run = {time_expr} WHERE id = ?",
         (schedule_id,)
     )
     conn.commit()
     conn.close()
+
+def toggle_schedule_active(schedule_id: int, is_active: bool):
+    """Toggle the is_active status of a schedule."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE schedules SET is_active = ? WHERE id = ?",
+        (1 if is_active else 0, schedule_id)
+    )
+    conn.commit()
+    conn.close()
+
+def get_active_schedules():
+    """Get all active schedules."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM schedules WHERE is_active = 1 ORDER BY next_run ASC")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def deactivate_all_schedules():
+    """Deactivate all schedules. Returns the number of schedules affected."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE schedules SET is_active = 0 WHERE is_active = 1")
+    count = c.rowcount
+    conn.commit()
+    conn.close()
+    return count

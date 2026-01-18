@@ -4,7 +4,6 @@ from datetime import datetime
 import time
 import os
 import database
-import scraper
 import mailer
 from typing import List
 
@@ -18,38 +17,61 @@ def check_and_run_jobs():
     due_jobs = database.get_due_schedules()
     print(f"[{datetime.now()}] Checking jobs... Found {len(due_jobs)} due.")
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("Skipping jobs: API Key missing.")
-        return
-
+    import scraper_css
+    import json
+    
     for job in due_jobs:
         try:
-            # 1. Scrape
-            print(f"Running job for {job['url']} ({job['topic']})")
-            data, error = scraper.fetch_and_extract(job['url'], job['topic'], api_key)
+            # 1. Scrape (Forced CSS)
+            print(f"Running job for {job['url']} (Auto-CSS)")
+            data, error = scraper_css.fetch_data(job['url'])
             
             if error:
                 status = "failed"
                 print(f"Job failed: {error}")
             else:
                 status = "success"
-                # Save to History
-                database.add_history(job['url'], job['topic'], data, status="scheduled_success")
                 
-                # Send Email
-                subject = f"360d Report: {job['topic']} - {datetime.now().strftime('%Y-%m-%d')}"
-                html_body = f"""
-                <h2>Scrape Result for {job['url']}</h2>
-                <p><b>Topic:</b> {job['topic']}</p>
-                <p><b>Items Found:</b> {len(data)}</p>
-                <hr>
-                <p>Check the dashboard for full details.</p>
-                """
-                mailer.send_notification_email(job['email'], subject, html_body)
+                # 2. Check for duplicate content
+                is_duplicate = False
+                last_history = database.get_last_history_for_url(job['url'])
+                
+                if last_history:
+                    try:
+                        current_json = json.dumps(data, sort_keys=True, ensure_ascii=False)
+                        last_json = json.dumps(json.loads(last_history['data_json']), sort_keys=True, ensure_ascii=False)
+                        
+                        if current_json == last_json:
+                            is_duplicate = True
+                            print(f"[Scheduler] Duplicate content detected for {job['url']}")
+                    except Exception as e:
+                        print(f"[Scheduler] Error comparing history: {e}")
+                
+                # Save to History
+                database.add_history(job['url'], "Auto-CSS", data, status="scheduled_success")
+                
+                # 3. Send Email based on duplicate check
+                if is_duplicate:
+                    # No change - send "no update" email
+                    subject = "360d 通知: 今日無更新 (內容未變更)"
+                    mailer.send_notification_email(job['email'], subject, updates=[])
+                elif len(data) > 0:
+                    subject = f"360d 通知: 今日有更新 ({len(data)} 則)"
+                    mailer.send_notification_email(job['email'], subject, updates=data)
+                else:
+                    subject = "360d 通知: 今日無更新"
+                    mailer.send_notification_email(job['email'], subject, updates=[])
 
-            # 2. Update Next Run
-            database.update_schedule_next_run(job['id'], job['frequency_days'])
+            # 4. Handle one-time vs continuous scheduling
+            is_continuous = job.get('is_continuous', 1)  # Default to continuous
+            if is_continuous:
+                # Update Next Run for continuous scheduling
+                job_unit = job.get('unit', 'days')
+                database.update_schedule_next_run(job['id'], job['frequency_days'], unit=job_unit)
+            else:
+                # One-time scheduling - deactivate after running
+                database.toggle_schedule_active(job['id'], False)
+                print(f"[Scheduler] One-time job {job['id']} completed and deactivated.")
             
         except Exception as e:
             print(f"Error processing job {job['id']}: {e}")
@@ -58,7 +80,7 @@ def start_scheduler():
     """Starts the background scheduler if not already running."""
     if not scheduler.running:
         database.init_db() # Ensure DB exists
-        # Check every 1 hour (or 60 seconds for demo/debug)
-        # For production/demo, let's check every 30 minutes
-        scheduler.add_job(check_and_run_jobs, 'interval', minutes=60, id='master_job_check', replace_existing=True)
+        # Check every 3 seconds for near-instant response
+        scheduler.add_job(check_and_run_jobs, 'interval', seconds=3, id='master_job_check', replace_existing=True)
         scheduler.start()
+        print("[Scheduler] Started - checking every 3 seconds")
