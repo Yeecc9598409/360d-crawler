@@ -65,71 +65,98 @@ def read_root():
 
 @app.post("/api/extract")
 def extract_data(request: ExtractRequest):
-    # Forced CSS Mode
-    print(f"Starting CSS extraction for: {request.url}")
-    data, error = scraper_css.fetch_data(request.url)
+    try:
+        # Forced CSS Mode
+        print(f"Starting CSS extraction for: {request.url}")
+        data, error = scraper_css.fetch_data(request.url)
 
-    status = "success"
-    if error:
-        status = "failed"
-        import traceback
-        traceback.print_exc() 
-        database.add_history(request.url, "Auto-CSS", [], status="failed")
-        raise HTTPException(status_code=500, detail=f"Extraction Failed: {error}")
-    
-    # Log success
-    from datetime import datetime
-    import json
-    
-    # Check for duplicate
-    is_duplicate = False
-    last_history = database.get_last_history_for_url(request.url)
-    
-    print(f"[DEBUG] last_history found: {last_history is not None}")
-    
-    if last_history:
-        print(f"[DEBUG] last_history timestamp raw: {last_history['timestamp']}")
+        status = "success"
+        if error:
+            status = "failed"
+            import traceback
+            traceback.print_exc() 
+            # Try to log failure to DB, but don't crash if DB fails
+            try:
+                database.add_history(request.url, "Auto-CSS", [], status="failed")
+            except Exception as e:
+                print(f"[DB Error] Failed to log failure: {e}")
+                
+            raise HTTPException(status_code=500, detail=f"Extraction Failed: {error}")
+        
+        # Log success
+        from datetime import datetime
+        import json
+        
+        # Check for duplicate
+        is_duplicate = False
         try:
-            last_time = datetime.strptime(last_history['timestamp'], "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            # Try alternate format if default fails
-            last_time = datetime.fromisoformat(last_history['timestamp'])
-        
-        print(f"[DEBUG] last_time.date(): {last_time.date()}, today: {datetime.now().date()}")
-        
-        if last_time.date() == datetime.now().date():
-             # Same day check
-             # Compare data (simplified string compare of JSON dump)
-             current_json = json.dumps(data, sort_keys=True, ensure_ascii=False)
-             last_json = json.dumps(json.loads(last_history['data_json']), sort_keys=True, ensure_ascii=False) # Normalize
-             
-             print(f"[DEBUG] current_json length: {len(current_json)}")
-             print(f"[DEBUG] last_json length: {len(last_json)}")
-             print(f"[DEBUG] JSONs match: {current_json == last_json}")
-             
-             if current_json == last_json:
-                 is_duplicate = True
-                 print("Duplicate extraction detected for today.")
+            last_history = database.get_last_history_for_url(request.url)
+            
+            print(f"[DEBUG] last_history found: {last_history is not None}")
+            
+            if last_history:
+                print(f"[DEBUG] last_history timestamp raw: {last_history['timestamp']}")
+                try:
+                    last_time = datetime.strptime(last_history['timestamp'], "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    # Try alternate format if default fails
+                    last_time = datetime.fromisoformat(last_history['timestamp'])
+                
+                print(f"[DEBUG] last_time.date(): {last_time.date()}, today: {datetime.now().date()}")
+                
+                if last_time.date() == datetime.now().date():
+                     # Same day check
+                     # Compare data (simplified string compare of JSON dump)
+                     current_json = json.dumps(data, sort_keys=True, ensure_ascii=False)
+                     last_json = json.dumps(json.loads(last_history['data_json']), sort_keys=True, ensure_ascii=False) # Normalize
+                     
+                     print(f"[DEBUG] current_json length: {len(current_json)}")
+                     print(f"[DEBUG] last_json length: {len(last_json)}")
+                     print(f"[DEBUG] JSONs match: {current_json == last_json}")
+                     
+                     if current_json == last_json:
+                         is_duplicate = True
+                         print("Duplicate extraction detected for today.")
+        except Exception as db_e:
+             print(f"[DB Warning] Duplicate check failed: {db_e}")
 
-    database.add_history(request.url, "Auto-CSS", data, status="success")
-    
-    # Send email notification if email is provided
-    if request.email:
-        import mailer
-        if is_duplicate:
-             subject = f"[360D] 重複確認通知 - 無更新"
-             mailer.send_repeated_notification_email(request.email, subject)
-             print(f"Repeated-Check Email sent to {request.email}")
-        else:
-             subject = f"[360D] 擷取結果 - {len(data)} 筆資料"
-             mailer.send_notification_email(request.email, subject, updates=data)
-             print(f"Standard Email sent to {request.email}")
-    
-    return {
-        "status": "success",
-        "count": len(data),
-        "data": data
-    }
+        try:
+            database.add_history(request.url, "Auto-CSS", data, status="success")
+        except Exception as db_e:
+            print(f"[DB Error] Failed to save history: {db_e}")
+            # We don't stop execution here, purely optional logging? 
+            # No, user wants history. But if DB fails, we should at least return data.
+            pass
+        
+        # Send email notification if email is provided
+        if request.email:
+            import mailer
+            try:
+                if is_duplicate:
+                     subject = f"[360D] 重複確認通知 - 無更新"
+                     mailer.send_repeated_notification_email(request.email, subject)
+                     print(f"Repeated-Check Email sent to {request.email}")
+                else:
+                     subject = f"[360D] 擷取結果 - {len(data)} 筆資料"
+                     mailer.send_notification_email(request.email, subject, updates=data)
+                     print(f"Standard Email sent to {request.email}")
+            except Exception as mail_e:
+                print(f"[Mailer Error] {mail_e}")
+        
+        return {
+            "status": "success",
+            "count": len(data),
+            "data": data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_msg = f"Critical Server Error: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.post("/api/schedule")
 def schedule_task(request: ScheduleRequest):
