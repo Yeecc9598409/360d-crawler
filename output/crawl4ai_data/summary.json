@@ -1,0 +1,13 @@
+{
+  "name": "crawl4ai",
+  "total_pages": 1,
+  "base_url": "https://docs.crawl4ai.com",
+  "llms_txt_detected": false,
+  "llms_txt_variant": null,
+  "pages": [
+    {
+      "title": "Home - Crawl4AI Documentation (v0.7.x)",
+      "url": "https://docs.crawl4ai.com"
+    }
+  ]
+}
